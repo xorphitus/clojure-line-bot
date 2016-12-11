@@ -9,6 +9,7 @@
                  [cheshire "5.6.3"]
                  [environ "1.1.0"]
                  [clj-http "2.3.0"]
+                 [pandect "0.6.1"]
                  [com.taoensso/timbre "4.7.4"]]
   :plugins [[lein-ring "0.9.7"]
             [lein-environ "1.1.0"]]

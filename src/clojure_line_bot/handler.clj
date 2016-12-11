@@ -4,6 +4,7 @@
             [environ.core :refer [env]]
             [cheshire.core :refer [parse-string generate-string]]
             [clj-http.client :as http-client]
+            [pandect.algo.sha256 :refer :all]
             [taoensso.timbre :as timbre :refer [error]]
             [ring.middleware.defaults :refer [wrap-defaults api-defaults]]
             [ring.adapter.jetty :as jetty]))
@@ -27,6 +28,9 @@
               status (:status exception-data)
               message (:body exception-data)]
           (error (format "status %d. %s" status message)))))))
+
+(defn validate-signature [content signature]
+  true)
 
 (defroutes app-routes
   (POST "/linebot/callback" {body :body}
