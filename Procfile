@@ -1,0 +1,1 @@
+web: java $JVM_OPTS -cp target/clojure-line-bot-standalone.jar clojure.main -m clojure-line-bot.handler
