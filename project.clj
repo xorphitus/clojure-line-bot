@@ -6,7 +6,9 @@
                  [compojure "1.5.1"]
                  [ring/ring-defaults "0.2.1"]
                  [ring/ring-jetty-adapter "1.5.0"]
-                 [environ "1.1.0"]]
+                 [cheshire "5.6.3"]
+                 [environ "1.1.0"]
+                 [com.taoensso/timbre "4.7.4"]]
   :plugins [[lein-ring "0.9.7"]
             [lein-environ "1.1.0"]]
   :ring {:handler clojure-line-bot.handler/app}
