@@ -17,4 +17,5 @@
   :uberjar-name "clojure-line-bot-standalone.jar"
   :profiles
   {:dev {:dependencies [[javax.servlet/servlet-api "2.5"]
-                        [ring/ring-mock "0.3.0"]]}})
+                        [ring/ring-mock "0.3.0"]]}
+   :test {:env {:line-channel-secret "SECRET"}}})

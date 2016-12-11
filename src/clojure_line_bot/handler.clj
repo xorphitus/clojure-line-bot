@@ -10,6 +10,7 @@
             [ring.adapter.jetty :as jetty]))
 
 (def line-channel-token (env :line-channel-token))
+(def line-channel-secret (env :line-channel-secret))
 (def line-api-endpoint "https://api.line.me/v2/bot")
 (def line-api-reply-path "/message/reply")
 
@@ -30,19 +31,25 @@
           (error (format "status %d. %s" status message)))))))
 
 (defn validate-signature [content signature]
-  true)
+  (let [hash (sha256-hmac-bytes content line-channel-secret)
+        decoded-signature (.. java.util.Base64 getDecoder (decode signature))]
+    (. java.security.MessageDigest isEqual hash decoded-signature)))
 
 (defroutes app-routes
-  (POST "/linebot/callback" {body :body}
-    (->> (parse-string (slurp body) true)
-         :events
-         (filter #(and
-                   (= (:type %) "message")
-                   (= (get-in % [:message :type]) "text")))
-         (map #(reply (get-in % [:source :userId])
-                      (:replyToken %)
-                      (get-in % [:message :text])))))
-  (route/not-found "Not Found"))
+  (POST "/linebot/callback" {body :body headers :headers}
+    (let [content (slurp body)]
+      (if (validate-signature content (get headers "x-line-signature"))
+        (->> (parse-string content true)
+             :events
+             (filter #(and
+                       (= (:type %) "message")
+                       (= (get-in % [:message :type]) "text")))
+             (map #(reply (get-in % [:source :userId])
+                          (:replyToken %)
+                          (get-in % [:message :text]))))
+        {:status 400
+         :headers {}
+         :body "bad request"}))))
 
 (def app
   (wrap-defaults app-routes (assoc-in api-defaults
