@@ -2,15 +2,16 @@
   (:require [compojure.core :refer :all]
             [compojure.route :as route]
             [environ.core :refer [env]]
-            [ring.middleware.defaults :refer [wrap-defaults site-defaults]]
+            [ring.middleware.defaults :refer [wrap-defaults api-defaults]]
             [ring.adapter.jetty :as jetty]))
 
 (defroutes app-routes
-  (GET "/" [] "Hello World")
+  (POST "/linebot/callback" {body :body} body)
   (route/not-found "Not Found"))
 
 (def app
-  (wrap-defaults app-routes site-defaults))
+  (wrap-defaults app-routes (assoc-in api-defaults
+                                      [:params :urlencoded] false)))
 
 (defn -main [& [port]]
   (let [port (Integer. (or port (env :port) 5000))]
