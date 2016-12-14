@@ -5,7 +5,7 @@
             [cheshire.core :refer [parse-string generate-string]]
             [clj-http.client :as http-client]
             [pandect.algo.sha256 :refer :all]
-            [taoensso.timbre :as timbre :refer [error]]
+            [taoensso.timbre :as timbre :refer [error info]]
             [ring.middleware.defaults :refer [wrap-defaults api-defaults]]
             [ring.adapter.jetty :as jetty]))
 
@@ -35,18 +35,22 @@
         decoded-signature (.. java.util.Base64 getDecoder (decode signature))]
     (. java.security.MessageDigest isEqual hash decoded-signature)))
 
+(defn route-line-events [event]
+  (condp #(= (:type %2) %1) event
+    "message" (condp #(= (get-in %2 [:message :type]) %1) event
+                "text" (reply (get-in event [:source :userId])
+                              (:replyToken event)
+                              (get-in event [:message :text]))
+                :else (info "messageだけどtext以外が来たよ"))
+    :else ("message以外が来たよ")))
+
 (defroutes app-routes
   (POST "/linebot/callback" {body :body headers :headers}
     (let [content (slurp body)]
       (if (validate-signature content (get headers "x-line-signature"))
         (->> (parse-string content true)
              :events
-             (filter #(and
-                       (= (:type %) "message")
-                       (= (get-in % [:message :type]) "text")))
-             (map #(reply (get-in % [:source :userId])
-                          (:replyToken %)
-                          (get-in % [:message :text]))))
+             (map route-line-events))
         {:status 400
          :headers {}
          :body "bad request"}))))
