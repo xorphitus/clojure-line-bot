@@ -37,26 +37,39 @@
         decoded-signature (.. Base64 getDecoder (decode signature))]
     (. MessageDigest isEqual hash decoded-signature)))
 
-(def line-events
-  {"message" {"text" #(reply (get-in % [:source :userId])
-                             (:replyToken %)
-                             (get-in % [:message :text]))
-              :else #(info (str "messageだけどtext以外が来たよ" %))}
-   :else #(info (str "message以外が来たよ" %))})
+(defn compile-event [name args handler]
+  (let [arg (first args)]
+    {name `(fn[~arg] ~handler)}))
 
-(defn route-line-events [events]
-  (map (fn [event]
-         (let [ev-type (:type event)]
-           (if-let [handler (get line-events ev-type)]
-             (if (or (not= ev-type "message") (fn? handler))
-               (handler event)
-               (let [sub-type (get-in event [:message :type])
-                     sub-events handler]
-                 (if-let [sub-handler (get sub-events sub-type)]
-                   (sub-handler event)
-                   ((:else sub-events) event))))
-             ((:else line-events) event))))
-       events))
+(defmacro MESSAGE [arg handler]
+  (compile-event "message" arg handler))
+
+(defmacro ELSE [arg handler]
+  (compile-event :else arg handler))
+
+(defmacro deflineevents [name & forms]
+  `(defn ~name [events#]
+     (let [handler-map# (apply merge ~@forms)]
+       (map (fn [event#]
+              (let [ev-type# (:type event#)]
+                (if-let [handler# (get handler-map# ev-type#)]
+                  (if (or (not= ev-type# "message") (fn? handler#))
+                    (handler# event#)
+                    (let [sub-type# (get-in event# [:message :type])
+                          sub-events# handler#]
+                      (if-let [sub-handler# (get sub-events# sub-type#)]
+                        (sub-handler# event#)
+                        ((:else sub-events#) event#))))
+                  ((:else handler-map#) event#))))
+            events#))))
+
+(deflineevents app-lineevents
+   (MESSAGE [event]
+            (reply (get-in event [:source :userId])
+                   (:replyToken event)
+                   (get-in event [:message :text])))
+   (ELSE [event]
+         (info (str "message以外が来たよ" event))))
 
 (defroutes app-routes
   (POST "/linebot/callback" {body :body headers :headers}
@@ -64,7 +77,7 @@
       (if (validate-signature content (get headers "x-line-signature"))
         (->> (parse-string content true)
              :events
-             route-line-events)
+             app-lineevents)
         {:status 400
          :headers {}
          :body "bad request"}))))
