@@ -7,7 +7,9 @@
             [pandect.algo.sha256 :refer :all]
             [taoensso.timbre :as timbre :refer [error info]]
             [ring.middleware.defaults :refer [wrap-defaults api-defaults]]
-            [ring.adapter.jetty :as jetty]))
+            [ring.adapter.jetty :as jetty])
+  (:import (java.util Base64)
+           (java.security MessageDigest)))
 
 (def line-channel-token (env :line-channel-token))
 (def line-channel-secret (env :line-channel-secret))
@@ -32,17 +34,29 @@
 
 (defn validate-signature [content signature]
   (let [hash (sha256-hmac-bytes content line-channel-secret)
-        decoded-signature (.. java.util.Base64 getDecoder (decode signature))]
-    (. java.security.MessageDigest isEqual hash decoded-signature)))
+        decoded-signature (.. Base64 getDecoder (decode signature))]
+    (. MessageDigest isEqual hash decoded-signature)))
 
-(defn route-line-events [event]
-  (condp #(= (:type %2) %1) event
-    "message" (condp #(= (get-in %2 [:message :type]) %1) event
-                "text" (reply (get-in event [:source :userId])
-                              (:replyToken event)
-                              (get-in event [:message :text]))
-                :else (info "messageだけどtext以外が来たよ"))
-    :else ("message以外が来たよ")))
+(def line-events
+  {"message" {"text" #(reply (get-in % [:source :userId])
+                             (:replyToken %)
+                             (get-in % [:message :text]))
+              :else #(info (str "messageだけどtext以外が来たよ" %))}
+   :else #(info (str "message以外が来たよ" %))})
+
+(defn route-line-events [events]
+  (map (fn [event]
+         (let [ev-type (:type event)]
+           (if-let [handler (get line-events ev-type)]
+             (if (or (not= ev-type "message") (fn? handler))
+               (handler event)
+               (let [sub-type (get-in event [:message :type])
+                     sub-events handler]
+                 (if-let [sub-handler (get sub-events sub-type)]
+                   (sub-handler event)
+                   ((:else sub-events) event))))
+             ((:else line-events) event))))
+       events))
 
 (defroutes app-routes
   (POST "/linebot/callback" {body :body headers :headers}
@@ -50,7 +64,7 @@
       (if (validate-signature content (get headers "x-line-signature"))
         (->> (parse-string content true)
              :events
-             (map route-line-events))
+             route-line-events)
         {:status 400
          :headers {}
          :body "bad request"}))))
